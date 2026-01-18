@@ -6,7 +6,7 @@ a = Analysis(
     ['src/geniusai_server.py'],
     pathex=['src'],
     binaries=[],
-    hiddenimports=[ 'chromadb.telemetry.product.posthog', 'chromadb', 'chromadb.api.rust' ],
+    hiddenimports=[ 'chromadb.telemetry.product.posthog', 'chromadb', 'chromadb.api.rust', 'encodings' ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
