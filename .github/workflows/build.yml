@@ -88,6 +88,8 @@ jobs:
     needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
     name: Create Release
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
