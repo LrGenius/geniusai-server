@@ -119,13 +119,13 @@ jobs:
       - name: Zip Windows artifact
         run: |
           cd artifacts/windows
-          zip -r ../geniusai-server-windows-x64.zip .
+          zip -r -s 1900m ../geniusai-server-windows-x64.zip .
           cd ../..
 
       - name: Zip macOS artifact
         run: |
           cd artifacts/macos
-          zip -r ../geniusai-server-macos-arm64.zip .
+          zip -r -s 1900m ../geniusai-server-macos-arm64.zip .
           cd ../..
 
       - name: Create Release
@@ -134,8 +134,8 @@ jobs:
           tag_name: ${{ github.event.inputs.tag }}
           name: Release ${{ github.event.inputs.tag }}
           files: |
-            artifacts/geniusai-server-windows-x64.zip
-            artifacts/geniusai-server-macos-arm64.zip
+            artifacts/geniusai-server-windows-x64.z*
+            artifacts/geniusai-server-macos-arm64.z*
           draft: false
           prerelease: false
         env:
