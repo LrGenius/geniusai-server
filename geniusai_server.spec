@@ -2,7 +2,7 @@
 
 block_cipher = None
 
-from PyInstaller.utils.hooks import copy_metadata
+from PyInstaller.utils.hooks import copy_metadata, collect_data_files
 
 # Collect metadata for packages that check their own version at runtime
 datas = [('open_clip', 'open_clip')]
@@ -21,13 +21,14 @@ datas += copy_metadata('certifi')
 datas += copy_metadata('charset-normalizer')
 datas += copy_metadata('idna')
 datas += copy_metadata('urllib3')
+# datas += collect_data_files('Pillow')
 
 a = Analysis(
     ['src/geniusai_server.py'],
     pathex=['src'],
     binaries=[],
     datas=datas,
-    hiddenimports=[ 'chromadb.telemetry.product.posthog', 'chromadb', 'chromadb.api.rust' ],
+    hiddenimports=['chromadb.telemetry.product.posthog', 'chromadb', 'chromadb.api.rust', 'torch', 'torchvision', 'PIL._imaging'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
