@@ -8,6 +8,9 @@ import threading
 import datetime
 import gc
 import torch
+from tqdm import tqdm
+from huggingface_hub import snapshot_download
+from huggingface_hub.utils import LocalEntryNotFoundError
 
 # Lazy-loadable global model instances
 # model, processor and tokenizer start as None and will be loaded on first use.
@@ -21,6 +24,99 @@ IDLE_UNLOAD_SECONDS = 30 * 60  # 30 minutes
 _last_used = None
 _model_lock = threading.RLock()
 _unloader_thread = None
+
+_download_status = {
+    "status": "idle",
+    "progress": 0,
+    "total": 0,
+    "error": None
+}
+
+class DownloadProgressTracker(tqdm):
+    files_completed = 0
+    def __init__(self, *args, **kwargs):
+        kwargs.pop('name', None)
+        super().__init__(*args, **kwargs, file=open(os.devnull, 'w'))
+
+        # The first tqdm is for files, the next ones are for bytes.
+        # We will report progress in files.
+        if self.unit != 'B':
+            with _download_lock:
+                _download_status["total"] = self.total
+                _download_status["progress"] = 0 # Initially 0 files completed
+                _download_status["unit"] = "files"
+
+    def close(self):
+        super().close()
+        # When a tqdm progress bar for a file download (unit='B') is closed, it means a file is done.
+        if self.unit == 'B':
+            with _download_lock:
+                # Use a class attribute to count completed files across instances
+                DownloadProgressTracker.files_completed += 1
+                _download_status["progress"] = DownloadProgressTracker.files_completed
+
+
+def get_download_status():
+    with _download_lock:
+        return _download_status
+
+def clip_model_is_cached():
+    try:
+        # Versucht, den Pfad aus dem Cache zu holen, ohne ins Internet zu gehen
+        path = snapshot_download(repo_id=IMAGE_MODEL_ID, local_files_only=True)
+        logger.info("CLIP model locally cached.")
+        return True
+    except LocalEntryNotFoundError:
+        logger.info("CLIP model not locally cached.")
+        return False
+    except Exception as e:
+        logger.error(f"Error while checking for local CLIP model: {e}", exc_info=True)
+        return False
+
+_download_thread = None
+_download_lock = threading.Lock()
+
+def _download_clip_model_thread():
+    global _download_status
+    with _download_lock:
+        if _download_status["status"] == "downloading":
+            logger.warning("Download already in progress.")
+            return
+        
+        # Reset counter at the beginning of a new download session
+        DownloadProgressTracker.files_completed = 0
+        _download_status = {
+            "status": "downloading",
+            "progress": 0,
+            "total": 0,
+            "error": None,
+            "unit": "files"
+        }
+
+    logger.info("Starting CLIP model download in background thread.")
+    try:
+        path = snapshot_download(
+            repo_id=IMAGE_MODEL_ID,
+            tqdm_class=DownloadProgressTracker
+        )
+        with _download_lock:
+            _download_status["status"] = "completed"
+        logger.info(f"CLIP model downloaded to {path}")
+    except Exception as e:
+        logger.error(f"Error downloading CLIP model in background: {e}", exc_info=True)
+        with _download_lock:
+            _download_status["status"] = "error"
+            _download_status["error"] = str(e)
+
+def start_download_clip_model():
+    global _download_thread
+    with _download_lock:
+        if _download_thread and _download_thread.is_alive():
+            logger.warning("Download thread is already running.")
+            return
+        _download_thread = threading.Thread(target=_download_clip_model_thread)
+        _download_thread.daemon = True
+        _download_thread.start()
 
 
 def _set_last_used():
@@ -43,69 +139,34 @@ def load_model():
             _set_last_used()
             return
 
+        if clip_model_is_cached():
 
-        try:
-            # Determine the path to the bundled model directory
-            # For PyInstaller, check if running as bundled executable
-            if getattr(sys, 'frozen', False):
-                # Running as PyInstaller bundle - use executable directory
-                server_dir = os.path.dirname(sys.executable)
-            else:
-                # Running as script - use script directory
-                server_dir = os.path.dirname(os.path.abspath(__file__))
-                # Go up one level from src/ to server root
-                server_dir = os.path.dirname(server_dir)
-            
-            local_model_dir = os.path.join(os.path.dirname(server_dir), 'models')
-            
-            logger.info(f"Server directory: {server_dir}")
-            logger.info(f"Checking for bundled model at: {local_model_dir}")
-            
-            # Check if local model directory exists (production/bundled scenario)
-            if os.path.isdir(local_model_dir):
-                # Verify model files exist
-                config_file = os.path.join(local_model_dir, 'open_clip_config.json')
-                weights_file = os.path.join(local_model_dir, 'open_clip_model.safetensors')
-                
-                if os.path.isfile(config_file) and os.path.isfile(weights_file):
-                    local_model_uri = f"local-dir:{local_model_dir}"
-                    logger.info(f"Loading OpenCLIP model from bundled directory: {local_model_dir}")
-                    model_obj, _, proc = open_clip.create_model_and_transforms(
-                        local_model_uri,
-                        pretrained=None
-                    )
-                    tok = open_clip.get_tokenizer(local_model_uri)
-                else:
-                    logger.warning(f"Bundled model directory exists but required files missing")
-                    logger.warning(f"Config file exists: {os.path.isfile(config_file)}")
-                    logger.warning(f"Weights file exists: {os.path.isfile(weights_file)}")
-                    raise FileNotFoundError("Bundled model files incomplete")
-            else:
-                # Fallback to HuggingFace Hub for development
-                logger.info(f"Bundled model directory not found at {local_model_dir}")
-                logger.info(f"Falling back to HuggingFace Hub (development mode)")
-                logger.info(f"Loading OpenCLIP model '{IMAGE_MODEL_ID}' from HuggingFace...")
+            try:
+                logger.info("Trying to load open_clip model from local cache")
                 model_obj, _, proc = open_clip.create_model_and_transforms(
                     IMAGE_MODEL_ID,
                     pretrained='webli'
                 )
                 tok = open_clip.get_tokenizer(IMAGE_MODEL_ID)
 
-            try:
-                model_obj.to(TORCH_DEVICE)
-                logger.info(f"Text and vision model moved to {TORCH_DEVICE}")
+                try:
+                    model_obj.to(TORCH_DEVICE)
+                    logger.info(f"Text and vision model moved to {TORCH_DEVICE}")
+                except Exception as e:
+                    logger.warning(f"Failed to move text and vision model to {TORCH_DEVICE}: {e}.")
+
+                model = model_obj
+                processor = proc
+                tokenizer = tok
+
+                _set_last_used()
+                logger.info("Loaded OpenCLIP model (lazy)")
             except Exception as e:
-                logger.warning(f"Failed to move text and vision model to {TORCH_DEVICE}: {e}.")
-
-            model = model_obj
-            processor = proc
-            tokenizer = tok
-
-            _set_last_used()
-            logger.info("Loaded OpenCLIP model (lazy)")
-        except Exception as e:
-            logger.error(f"Failed to load OpenCLIP model (lazy): {e}", exc_info=True)
-            raise
+                logger.error(f"Failed to load OpenCLIP model (lazy): {e}", exc_info=True)
+                raise
+        
+        else:
+            logger.warning("Cannot load CLIP model, as it is not yet downloaded.")
 
 
 def unload_model():

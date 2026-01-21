@@ -36,6 +36,8 @@ dependencies:
   - google-genai
   - openai
   - pyinstaller
+
+  - huggingface_hub
   
   - pip:
     - rich
