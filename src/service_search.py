@@ -41,21 +41,26 @@ def search_images(term, quality_sort, uuids_to_search):
 
     # 1. Semantic Search
     tokenizer = server_lifecycle.get_tokenizer()
-    text_tokens = tokenizer(term).to(TORCH_DEVICE)
-    with torch.no_grad():
-        model = server_lifecycle.get_model()
-        text_features = model.encode_text(text_tokens)
-        normalized_embeddings = F.normalize(text_features, p=2, dim=1).cpu().numpy()[0]
+    if tokenizer:
+        text_tokens = tokenizer(term).to(TORCH_DEVICE)
+        with torch.no_grad():
+            model = server_lifecycle.get_model()
+            text_features = model.encode_text(text_tokens)
+            normalized_embeddings = F.normalize(text_features, p=2, dim=1).cpu().numpy()[0]
 
-    db_results = chroma_service.query_images(
-        query_embedding=normalized_embeddings,
-        n_results=300,
-        where_clause={"uuid": {"$in": uuids_to_search}} if uuids_to_search else None
-    )
+        db_results = chroma_service.query_images(
+            query_embedding=normalized_embeddings,
+            n_results=300,
+            where_clause={"uuid": {"$in": uuids_to_search}} if uuids_to_search else None
+        )
 
-    relevant_results = _filter_by_relevance(db_results)
-    sorted_semantic_results = _transform_and_sort_results(relevant_results, quality_sort)
-    semantic_uuids = {res['uuid'] for res in sorted_semantic_results}
+        relevant_results = _filter_by_relevance(db_results)
+        sorted_semantic_results = _transform_and_sort_results(relevant_results, quality_sort)
+        semantic_uuids = {res['uuid'] for res in sorted_semantic_results}
+    else:
+        logger.info("CLIP model not loaded, skipping semantic search.")
+        sorted_semantic_results = []
+        semantic_uuids = set()
 
     # 2. Metadata Search (in-memory)
     logger.info("Performing metadata search in-memory. This may be slow for large databases without a UUID filter.")
