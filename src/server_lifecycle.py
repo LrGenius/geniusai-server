@@ -9,7 +9,7 @@ import datetime
 import gc
 import torch
 from tqdm import tqdm
-from huggingface_hub import snapshot_download
+from huggingface_hub import HfApi, snapshot_download
 from huggingface_hub.utils import LocalEntryNotFoundError
 
 # Lazy-loadable global model instances
@@ -32,37 +32,38 @@ _download_status = {
     "error": None
 }
 
+
 class DownloadProgressTracker(tqdm):
-    files_completed = 0
+    bytes_downloaded = 0
+    total_size = 1  # Avoid division by zero, will be updated
+
     def __init__(self, *args, **kwargs):
         kwargs.pop('name', None)
         super().__init__(*args, **kwargs, file=open(os.devnull, 'w'))
-
-        # The first tqdm is for files, the next ones are for bytes.
-        # We will report progress in files.
-        if self.unit != 'B':
-            with _download_lock:
-                _download_status["total"] = self.total
-                _download_status["progress"] = 0 # Initially 0 files completed
-                _download_status["unit"] = "files"
-
-    def close(self):
-        super().close()
-        # When a tqdm progress bar for a file download (unit='B') is closed, it means a file is done.
+        # We only care about byte-level progress
         if self.unit == 'B':
             with _download_lock:
-                # Use a class attribute to count completed files across instances
-                DownloadProgressTracker.files_completed += 1
-                _download_status["progress"] = DownloadProgressTracker.files_completed
+                # Set the total for the status, this might be called multiple times
+                # but it is fine. The final value in _download_status will be from the
+                # _download_clip_model_thread function.
+                _download_status["total"] = DownloadProgressTracker.total_size
+                _download_status["unit"] = "B"
+
+    def update(self, n=1):
+        super().update(n)
+        if self.unit == 'B':
+            with _download_lock:
+                DownloadProgressTracker.bytes_downloaded += n
+                _download_status["progress"] = DownloadProgressTracker.bytes_downloaded
 
 
 def get_download_status():
     with _download_lock:
         return _download_status
 
+
 def clip_model_is_cached():
     try:
-        # Versucht, den Pfad aus dem Cache zu holen, ohne ins Internet zu gehen
         path = snapshot_download(repo_id=IMAGE_MODEL_ID, local_files_only=True)
         logger.info("CLIP model locally cached.")
         return True
@@ -73,8 +74,10 @@ def clip_model_is_cached():
         logger.error(f"Error while checking for local CLIP model: {e}", exc_info=True)
         return False
 
+
 _download_thread = None
 _download_lock = threading.Lock()
+
 
 def _download_clip_model_thread():
     global _download_status
@@ -82,19 +85,25 @@ def _download_clip_model_thread():
         if _download_status["status"] == "downloading":
             logger.warning("Download already in progress.")
             return
-        
-        # Reset counter at the beginning of a new download session
-        DownloadProgressTracker.files_completed = 0
-        _download_status = {
-            "status": "downloading",
-            "progress": 0,
-            "total": 0,
-            "error": None,
-            "unit": "files"
-        }
 
     logger.info("Starting CLIP model download in background thread.")
     try:
+        api = HfApi()
+        model_info = api.model_info(IMAGE_MODEL_ID, files_metadata=True)
+        total_size = sum(f.size for f in model_info.siblings if f.size)
+
+        DownloadProgressTracker.total_size = total_size
+        DownloadProgressTracker.bytes_downloaded = 0
+
+        with _download_lock:
+            _download_status = {
+                "status": "downloading",
+                "progress": 0,
+                "total": total_size,
+                "error": None,
+                "unit": "B"
+            }
+
         path = snapshot_download(
             repo_id=IMAGE_MODEL_ID,
             tqdm_class=DownloadProgressTracker

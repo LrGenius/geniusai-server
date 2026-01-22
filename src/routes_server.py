@@ -5,7 +5,7 @@ import service_chroma as chroma_service
 import server_lifecycle
 from config import logger
 from service_metadata import get_analysis_service
-from server_lifecycle import clip_model_is_cached, start_download_clip_model, get_download_status
+from server_lifecycle import get_model, start_download_clip_model, get_download_status
 
 server_bp = Blueprint('server', __name__)
 
@@ -74,20 +74,22 @@ def list_models():
         logger.error(f"Error listing models: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
     
-@server_bp.route('/clip/cached', methods=['GET'])
+@server_bp.route('/clip/status', methods=['GET'])
 def clip_cached():
-
-    logger.info("Check if CLIP model is cached request received.")
-
     try:
-        clip_cached = clip_model_is_cached()
-        logger.info(f"CLIP model present: {clip_cached}")
-        return jsonify({"clip_cached": clip_cached})
+        model = get_model()
+        if model:
+            logger.info(f"CLIP model loaded: {model}")
+            return jsonify({"clip": "ready", "message": "CLIP model is loaded and ready."})
+        else:
+            logger.info("CLIP model not loaded.")
+            return jsonify({"clip": "not_ready", "message": "CLIP model is not loaded."})           
+        
     except Exception as e:
-        logger.error(f"Error while checking for cached CLIP model: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Error while loading CLIP model: {e}", exc_info=True)
+        return jsonify({"clip": "not_ready", "message": str(e)})
     
-@server_bp.route('/clip/download/start', methods=['GET'])
+@server_bp.route('/clip/download/start', methods=['POST'])
 def download_clip_model_start():
     logger.info("Download CLIP model request received")
 
