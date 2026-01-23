@@ -180,7 +180,7 @@ def load_model():
                     tokenizer = tok
 
             except Exception as e:
-                logger.warning("OpenCLIP model not found in local cache. Please download the model first, if you want to use it.")
+                logger.warning(f"Failed to load OpenCLIP model from local cache. This can happen if the model is not fully downloaded, is corrupted, or if there is a configuration issue. The error was: {e}", exc_info=True)
 
         except Exception as e:
             logger.error(f"Failed to load OpenCLIP model (lazy): {e}", exc_info=True)
