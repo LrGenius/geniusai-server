@@ -109,4 +109,4 @@ def download_clip_model_status():
         logger.error(f"Error while getting download status for CLIP model: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
         
-        
+

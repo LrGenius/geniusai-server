@@ -1,15 +1,15 @@
 import os
 import time
 import signal
-from config import DB_PATH, logger, IMAGE_MODEL_ID, CLIP_MODEL_NAME, TORCH_DEVICE
-import sys
+from config import DB_PATH, logger, IMAGE_MODEL_ID, TORCH_DEVICE
 import open_clip
 import threading
 import datetime
 import gc
 import torch
-from tqdm import tqdm
-from huggingface_hub import HfApi, snapshot_download, hf_hub_download
+import tqdm
+from huggingface_hub import snapshot_download, HfApi, hf_hub_download
+
 
 # Lazy-loadable global model instances
 # model, processor and tokenizer start as None and will be loaded on first use.
@@ -32,27 +32,39 @@ _download_status = {
 }
 
 
-class DownloadProgressTracker(tqdm):
-    bytes_downloaded = 0
-    total_size = 1  # Avoid division by zero, will be updated
-
+class DownloadProgressTracker(tqdm.tqdm):
+    # Statische Zähler für den gesamten Prozess
+    global_bytes_downloaded = 0
+    global_total_size = 0
+    
     def __init__(self, *args, **kwargs):
+        # 1. Mute: Die Ausgabe geht ins Nichts (devnull)
+        kwargs['file'] = open(os.devnull, 'w')
         kwargs.pop('name', None)
-        super().__init__(*args, **kwargs, file=open(os.devnull, 'w'))
-        # We only care about byte-level progress
-
-        with _download_lock:
-            # Set the total for the status, this might be called multiple times
-            # but it is fine. The final value in _download_status will be from the
-            # _download_clip_model_thread function.
-            _download_status["total"] = DownloadProgressTracker.total_size
-            _download_status["unit"] = "B"
+        
+        # Original init aufrufen
+        super().__init__(*args, **kwargs)
 
     def update(self, n=1):
+        # Interne Logik von tqdm weiterlaufen lassen (für Timings etc.)
         super().update(n)
-        with _download_lock:
-            DownloadProgressTracker.bytes_downloaded += n
-            _download_status["progress"] = DownloadProgressTracker.bytes_downloaded
+        
+        # 2. Daten abgreifen
+        # Wir filtern auf Bytes, um nicht Dateianzahl-Balken mitzuzählen
+        if n > 0 and self.unit in ['B', 'b', None]:
+             with _counter_lock:
+                DownloadProgressTracker.global_bytes_downloaded += n
+                
+                # GUI Status Update
+                with _download_lock:
+                    current = DownloadProgressTracker.global_bytes_downloaded
+                    total = DownloadProgressTracker.global_total_size
+                    
+                    # Cap auf 100% (falls tqdm etwas überschießt)
+                    if total > 0 and current > total:
+                        current = total
+                    
+                    _download_status["progress"] = current
 
 
 def get_download_status():
@@ -71,6 +83,7 @@ def _download_clip_model_thread():
             return
 
     logger.info("Starting CLIP model download in background thread.")
+
     try:
         api = HfApi()
         model_info = api.model_info(IMAGE_MODEL_ID, files_metadata=True)
@@ -90,7 +103,7 @@ def _download_clip_model_thread():
 
         path = snapshot_download(
             repo_id=IMAGE_MODEL_ID,
-            tqdm_class=DownloadProgressTracker
+            # tqdm_class=DownloadProgressTracker
         )
 
         with _download_lock:
@@ -101,6 +114,7 @@ def _download_clip_model_thread():
         with _download_lock:
             _download_status["status"] = "error"
             _download_status["error"] = str(e)
+
 
 def start_download_clip_model():
     global _download_thread
