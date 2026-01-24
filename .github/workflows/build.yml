@@ -29,14 +29,6 @@ jobs:
         shell: bash -l {0}
         run: python --version
 
-      - name: Install PyInstaller
-        shell: bash -l {0}
-        run: pip install pyinstaller
-
-      - name: Prepare model bundle
-        shell: bash -l {0}
-        run: python model_scripts/prepare_model_bundle.py --output_dir dist/models
-
       - name: Build with PyInstaller
         shell: bash -l {0}
         env:

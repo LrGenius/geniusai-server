@@ -22,3 +22,6 @@ chroma.sqlite3
 lrgenius-server.log
 lrgenius-server.OK
 lrgenius-server.pid
+
+run.sh
+run.bat

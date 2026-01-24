@@ -9,37 +9,20 @@ dependencies:
   - pip
   - setuptools
   - wheel
-
-  # Web Server Framework
-  - flask
-  - waitress
-
-  # Scientific Computing & Image Processing
-  - pillow
-  - numpy
-  - pandas
-  - tqdm
-
-  # Vector Database & Search
-  - chromadb
-
-  # System Utilities
-  - psutil
-
-  # HTTP Client for Provider Communication
-  - requests
-
-  - google-genai
-  - openai
   - pyinstaller
-
-
   
   - pip:
+    - open_clip_torch
     - rich
     - ollama
     - lmstudio
-    - open_clip_torch
-    - huggingface-hub
-    - transformers
-    - tokenizers
+    - pillow
+    - google-genai
+    - openai
+    - requests
+    - chromadb
+    - numpy
+    - pandas
+    - psutil
+    - flask
+    - waitress
