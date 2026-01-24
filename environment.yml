@@ -13,6 +13,7 @@ dependencies:
   
   - pip:
     - open_clip_torch
+    - transformers
     - rich
     - ollama
     - lmstudio
