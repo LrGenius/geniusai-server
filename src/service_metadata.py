@@ -52,17 +52,6 @@ class AnalysisService:
         """
         logger.info("Checking available LLM providers (lazy loading enabled)...")
         
-        # Qwen (local) - Models loaded on first use
-        # try:
-        #     qwen = QwenProvider({})
-        #     if qwen.is_available():
-        #         self.providers['qwen'] = qwen
-        #         logger.info("✓ Qwen provider available (will load on first use)")
-        #     else:
-        #         logger.warning("✗ Qwen provider not available (model files not found)")
-        # except Exception as e:
-        #     logger.error(f"✗ Failed to initialize Qwen provider: {e}")
-        
         # Ollama (local) - Always register, availability checked dynamically
         try:
             ollama = OllamaProvider({})

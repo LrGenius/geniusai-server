@@ -7,18 +7,11 @@ import io
 
 
 # Import prompts from config
-try:
-    from config import (
-        METADATA_GENERATION_SYSTEM_PROMPT,
-        QUALITY_SCORING_SYSTEM_PROMPT,
-        QUALITY_SCORING_USER_PROMPT
-    )
-except ImportError:
-    # Fallback values if config not available
-    METADATA_GENERATION_SYSTEM_PROMPT = "You are a professional photography analyst."
-    QUALITY_SCORING_SYSTEM_PROMPT = "You are a professional photo critic."
-    QUALITY_SCORING_USER_PROMPT = "Rate this photo critically."
-
+from config import (
+    METADATA_GENERATION_SYSTEM_PROMPT,
+    QUALITY_SCORING_SYSTEM_PROMPT,
+    QUALITY_SCORING_USER_PROMPT
+)
 
 @dataclass
 class MetadataGenerationRequest:

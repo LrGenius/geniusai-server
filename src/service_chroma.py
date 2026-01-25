@@ -116,39 +116,3 @@ def group_and_sort_images(uuids, phash_threshold, clip_threshold, time_delta):
     logger.warning("group_and_sort_images is not yet implemented.")
     return []
 
-
-def get_db_stats():
-    _ensure_initialized()
-    count = collection.count()
-    db_size = sum(os.path.getsize(os.path.join(dirpath, filename)) for dirpath, dirnames, filenames in os.walk(DB_PATH) for filename in filenames) / (1024 * 1024)
-    
-    min_aesthetic_score, max_aesthetic_score, aesthetic_rated_count = None, None, 0
-    min_technical_score, max_technical_score, technical_rated_count = None, None, 0
-    phash_count = 0
-    capture_time_count = 0
-    
-    all_metadatas = collection.get(include=['metadatas'])['metadatas']
-    for metadata in all_metadatas:
-        if not metadata:
-            continue
-        
-        if metadata.get("phash") is not None:
-            phash_count += 1
-
-        if metadata.get("capture_time") is not None:
-            capture_time_count += 1
-
-        aesthetic_score = metadata.get("aesthetic_score")
-        if aesthetic_score is not None:
-            aesthetic_rated_count += 1
-            if min_aesthetic_score is None or aesthetic_score < min_aesthetic_score: min_aesthetic_score = aesthetic_score
-            if max_aesthetic_score is None or aesthetic_score > max_aesthetic_score: max_aesthetic_score = aesthetic_score
-
-    return { 
-        "num_images": count, 
-        "db_size_mb": round(db_size, 2), 
-        "num_with_phash": phash_count,
-        "num_rated_aesthetic": aesthetic_rated_count,
-        "num_with_capture_time": capture_time_count,
-    }
-

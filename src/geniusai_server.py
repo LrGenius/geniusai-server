@@ -17,6 +17,7 @@ from routes_index import index_bp
 from routes_search import search_bp
 from routes_server import server_bp
 from routes_import import import_bp
+from routes_clip import clip_bp
 
 app = Flask(__name__)
 logger.info("Flask app created")
@@ -25,6 +26,7 @@ logger.info("Flask app created")
 app.register_blueprint(index_bp)
 app.register_blueprint(search_bp)
 app.register_blueprint(server_bp)
+app.register_blueprint(clip_bp)
 app.register_blueprint(import_bp)
 
 @app.errorhandler(500)
@@ -41,7 +43,6 @@ if __name__ == "__main__":
     
     # Mark server as ready for startup scripts
     server_lifecycle.write_ok_file()
-    logger.info("✓ Server initialized and ready to accept connections")
     
     # Write PID for lifecycle management
     server_lifecycle.write_pid_file()
@@ -52,7 +53,6 @@ if __name__ == "__main__":
             app.run(debug=True, host="127.0.0.1", port=19819)
         else:
             logger.info("Starting production server on http://127.0.0.1:19819")
-            logger.info("Heavy modules (ChromaDB, AI models) will load on first request")
             serve(app, host="127.0.0.1", port=19819, threads=4)
     finally:
         logger.info("Shutting down server...")

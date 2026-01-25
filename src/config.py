@@ -8,30 +8,16 @@ import torch
 parser = argparse.ArgumentParser(description='LrGenius Server')
 parser.add_argument('--db-path', type=str, help='Path to the ChromaDB database folder', required=True)
 parser.add_argument('--debug', action='store_true', help='Enable debug mode with auto-reloading and debug log level')
-parser.add_argument('--fetch-models', action='store_true', help='Fetch models from HF-Hub')
 args = parser.parse_args()
 
 # --- Constants ---
 DB_PATH = args.db_path
-FETCH_MODELS = args.fetch_models
 
-# --- Code Style Preferences ---
-USE_EMOJIS = False  # Set to False to avoid emojis in logs and output
-
-def format_log_message(message: str, emoji: str = "") -> str:
-    """
-    Format log message with optional emoji based on USE_EMOJIS setting.
-    Use this function to ensure consistent logging style.
-    """
-    if USE_EMOJIS and emoji:
-        return f"{emoji} {message}"
-    return message
 
 # --- Model & Path Definitions ---
 # Platform-specific device selection:
 # - macOS: Use Metal GPU (MPS) if available
-# - Windows: CPU-only for optimized binary size and compatibility
-# - Linux: CUDA if available, otherwise CPU
+# - Windows: CPU-only for now to avoid VRAM issues with open_clip on CUDA and local LLMs using CUDA
 if sys.platform == "darwin":  # macOS
     TORCH_DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
 elif sys.platform == "win32":  # Windows
@@ -42,8 +28,6 @@ elif sys.platform == "win32":  # Windows
 CLIP_MODEL_NAME="ViT-SO400M-16-SigLIP2-384"
 IMAGE_MODEL_ID = "timm/" + CLIP_MODEL_NAME
 
-LLM_BATCH_SIZE = 3  # Optimized batch size for better performance
-LLM_TEMPERATURE = 0.2  # Reduced for faster, more deterministic responses
 
 # --- Prompts for Quality Scoring ---
 # Optimized prompts for faster processing and better JSON compliance
