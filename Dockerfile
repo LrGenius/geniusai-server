@@ -1,0 +1,36 @@
+# geniusai-server – für lokalen oder Remote-Betrieb als Container
+# Build: docker build -t geniusai-server .
+# Run:   docker run -p 19819:19819 -v /pfad/zu/daten:/data -e GENIUSAI_HOST=0.0.0.0 geniusai-server
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Optionale System-Pakete (z.B. für onnxruntime/insightface bei Bedarf)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Abhängigkeiten
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# App (vendored open_clip + src)
+COPY open_clip /app/open_clip
+COPY src /app/src
+
+# Damit beim Start "config" und "open_clip" gefunden werden
+ENV PYTHONPATH=/app:/app/src
+
+# Remote-Zugriff: Server auf allen Interfaces binden
+ENV GENIUSAI_HOST=0.0.0.0
+ENV GENIUSAI_PORT=19819
+
+# ChromaDB-Daten persistent (von außen mounten)
+VOLUME /data
+
+EXPOSE 19819
+
+# DB-Pfad per Volume; bei Bedarf überschreiben: docker run ... geniusai-server --db-path /anderer/pfad
+CMD ["python", "/app/src/geniusai_server.py", "--db-path", "/data"]

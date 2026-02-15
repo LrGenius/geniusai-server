@@ -1,0 +1,19 @@
+# geniusai-server dependencies (for Docker / pip install)
+# open_clip: use vendored ./open_clip (PYTHONPATH)
+transformers
+pillow
+ollama
+lmstudio
+google-genai
+openai
+requests
+chromadb
+numpy
+pandas
+psutil
+flask
+waitress
+insightface
+onnxruntime
+scikit-learn
+torch

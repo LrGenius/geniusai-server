@@ -47,13 +47,15 @@ if __name__ == "__main__":
     # Write PID for lifecycle management
     server_lifecycle.write_pid_file()
     
+    host = os.environ.get("GENIUSAI_HOST", "127.0.0.1")
+    port = int(os.environ.get("GENIUSAI_PORT", "19819"))
     try:
         if args.debug:
-            logger.info("Starting Flask development server in debug mode on http://127.0.0.1:19819")
-            app.run(debug=True, host="127.0.0.1", port=19819)
+            logger.info(f"Starting Flask development server in debug mode on http://{host}:{port}")
+            app.run(debug=True, host=host, port=port)
         else:
-            logger.info("Starting production server on http://127.0.0.1:19819")
-            serve(app, host="127.0.0.1", port=19819, threads=4)
+            logger.info(f"Starting production server on http://{host}:{port}")
+            serve(app, host=host, port=port, threads=4)
     finally:
         logger.info("Shutting down server...")
         server_lifecycle.remove_pid_file()

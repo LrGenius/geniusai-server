@@ -22,6 +22,9 @@ if sys.platform == "darwin":  # macOS
     TORCH_DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
 elif sys.platform == "win32":  # Windows
     TORCH_DEVICE = "cpu"
+else:
+    # Linux (e.g. Docker): CPU; set CUDA in container if needed
+    TORCH_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 
