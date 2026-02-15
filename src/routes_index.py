@@ -52,6 +52,7 @@ def _extract_options(data):
         options['keyword_categories'] = keyword_categories_raw
 
     options['replace_ss'] = str(data.get('replace_ss', 'false')).lower() == 'true'
+    options['ollama_base_url'] = data.get('ollama_base_url') or None  # Optional: use custom Ollama host
     # Support both snake_case and camelCase keys from clients
     reg_val = data.get('regenerate_metadata')
     if reg_val is None:

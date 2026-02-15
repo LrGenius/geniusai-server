@@ -292,6 +292,7 @@ class AnalysisService:
             keyword_categories=options.get('keyword_categories'),
             system_prompt=options.get('prompt'),
             date_time=options.get('date_time'),
+            ollama_base_url=options.get('ollama_base_url'),
         )
         
         try:
@@ -333,7 +334,8 @@ class AnalysisService:
             temperature=options['temperature'],
             max_tokens=options.get('max_tokens'),
             system_prompt=options.get('system_prompt'),
-            user_prompt=options.get('user_prompt')
+            user_prompt=options.get('user_prompt'),
+            ollama_base_url=options.get('ollama_base_url'),
         )
         
         try:
@@ -345,7 +347,8 @@ class AnalysisService:
             logger.error(f"Unexpected error during quality scoring for {uuid}: {e}", exc_info=True)
             return QualityScoreResponse(uuid=uuid, success=False, error=str(e))
 
-    def get_available_models(self, openai_apikey: Optional[str] = None, gemini_apikey: Optional[str] = None) -> Dict[str, List[str]]:
+    def get_available_models(self, openai_apikey: Optional[str] = None, gemini_apikey: Optional[str] = None,
+                            ollama_base_url: Optional[str] = None) -> Dict[str, List[str]]:
         """
         Return all available multimodal (vision-capable) models from all providers.
         """
@@ -357,10 +360,12 @@ class AnalysisService:
                 if provider_name == 'gemini' and gemini_apikey:
                     provider_instance.api_key = gemini_apikey
                 
+                if provider_name == 'ollama' and ollama_base_url:
+                    provider_instance = OllamaProvider({'base_url': ollama_base_url})
                 if provider_name in ['ollama', 'lmstudio'] and not provider_instance.is_available():
                     result[provider_name] = []
                     continue
-                
+
                 models = provider_instance.list_available_models()
                 result[provider_name] = models
             except Exception as e:

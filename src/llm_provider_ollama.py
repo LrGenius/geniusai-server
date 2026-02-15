@@ -52,6 +52,11 @@ class OllamaProvider(LLMProviderBase):
             logger.warning(f"Ollama not available: {e}")
             return False
     
+    def _get_client(self, base_url_override: Optional[str] = None):
+        """Get Ollama client, using base_url_override when provided (e.g. from request)."""
+        url = base_url_override or self.base_url
+        return Client(host=url) if Client else None
+
     def generate_metadata(self, request: MetadataGenerationRequest) -> MetadataGenerationResponse:
         """
         Generate metadata using Ollama API.
@@ -69,8 +74,7 @@ class OllamaProvider(LLMProviderBase):
                     success=False,
                     error="Ollama SDK not installed. Please install the 'ollama' Python package.",
                 )
-            if self.client is None:
-                self.client = Client(host=self.base_url)
+            client = self._get_client(getattr(request, 'ollama_base_url', None))
 
             # Convert image to base64
             image_b64 = self._image_to_base64(request.image_data)
@@ -85,7 +89,7 @@ class OllamaProvider(LLMProviderBase):
 
             # Call Ollama via Python SDK
             logger.debug("Sending chat request to Ollama via SDK")
-            result = self.client.chat(
+            result = client.chat(
                 model=model_to_use,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -148,7 +152,7 @@ class OllamaProvider(LLMProviderBase):
                 success=False,
                 error=str(e),
             )
-    
+
     def generate_quality_scores(self, request: QualityScoreRequest) -> QualityScoreResponse:
         """
         Generate quality scores using Ollama.
@@ -167,8 +171,7 @@ class OllamaProvider(LLMProviderBase):
                     success=False,
                     error="Ollama SDK not installed. Please install the 'ollama' Python package.",
                 )
-            if self.client is None:
-                self.client = Client(host=self.base_url)
+            client = self._get_client(getattr(request, 'ollama_base_url', None))
 
             # Convert image to base64
             image_b64 = self._image_to_base64(request.image_data)
@@ -193,7 +196,7 @@ class OllamaProvider(LLMProviderBase):
             model_to_use = request.model
             logger.info(f"[Ollama] Using model for quality: {model_to_use}")
 
-            result = self.client.chat(
+            result = client.chat(
                 model=model_to_use,
                 messages=[
                     {"role": "system", "content": system_prompt},

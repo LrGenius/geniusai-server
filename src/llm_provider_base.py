@@ -58,6 +58,9 @@ class MetadataGenerationRequest:
     # Or a nested dict: {"People": {"Family": {}, "Friends": {}}, "Activities": {}}
     keyword_categories: Optional[Union[List[str], Dict[str, Any]]]
 
+    # Provider-specific overrides (e.g. Ollama on remote host)
+    ollama_base_url: Optional[str] = None
+
 
 @dataclass
 class MetadataGenerationResponse:
@@ -100,6 +103,9 @@ class QualityScoreRequest:
     # System and user prompts (can override defaults)
     system_prompt: Optional[str]
     user_prompt: Optional[str]
+
+    # Provider-specific overrides (e.g. Ollama on remote host)
+    ollama_base_url: Optional[str] = None
 
 
 @dataclass

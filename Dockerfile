@@ -6,10 +6,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Optionale System-Pakete (z.B. für onnxruntime/insightface bei Bedarf)
+# Build-Tools für insightface (Cython/C++-Erweiterungen)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Abhängigkeiten
