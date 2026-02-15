@@ -1,5 +1,5 @@
 # geniusai-server dependencies (for Docker / pip install)
-# open_clip: use vendored ./open_clip (PYTHONPATH)
+open_clip_torch
 transformers
 pillow
 ollama
@@ -17,3 +17,4 @@ insightface
 onnxruntime
 scikit-learn
 torch
+
