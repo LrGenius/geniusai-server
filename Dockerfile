@@ -25,8 +25,13 @@ ENV PYTHONPATH=/app:/app/src
 ENV GENIUSAI_HOST=0.0.0.0
 ENV GENIUSAI_PORT=19819
 
+# Modell-Caches (open_clip/Hugging Face + InsightFace) – Volume mounten, damit Downloads persistent sind
+ENV HF_HOME=/models/huggingface
+ENV INSIGHTFACE_ROOT=/models/insightface
+
 # ChromaDB-Daten persistent (von außen mounten)
 VOLUME /data
+VOLUME /models
 
 EXPOSE 19819
 

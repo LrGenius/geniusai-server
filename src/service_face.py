@@ -8,6 +8,7 @@ import io
 import base64
 from typing import List, Tuple, Optional
 
+import os
 import numpy as np
 from PIL import Image
 
@@ -24,7 +25,8 @@ def _get_face_app():
         return _face_app
     try:
         from insightface.app import FaceAnalysis
-        _face_app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+        root = os.environ.get("INSIGHTFACE_ROOT", os.path.expanduser("~/.insightface"))
+        _face_app = FaceAnalysis(name="buffalo_l", root=root, providers=["CPUExecutionProvider"])
         _face_app.prepare(ctx_id=0, det_size=(640, 640))
         logger.info("InsightFace FaceAnalysis (buffalo_l) loaded.")
         return _face_app

@@ -14,6 +14,8 @@ services:
     volumes:
       # ChromaDB und Logs persistent im Ordner ./data
       - ./data:/data
+      # OpenCLIP/Hugging Face + InsightFace: Modell-Downloads persistent (große Dateien)
+      - ./models:/models
     environment:
       - GENIUSAI_HOST=0.0.0.0
       - GENIUSAI_PORT=19819
