@@ -2,6 +2,7 @@ from config import logger
 import service_chroma as chroma_service
 from service_metadata import get_analysis_service
 import server_lifecycle as server_lifecycle
+import service_face as face_service
 import json
 from datetime import datetime as time
 
@@ -53,6 +54,44 @@ def _flatten_keywords(keywords):
     
     return ""
 
+
+def get_uuids_needing_processing(uuids: list[str], options: dict) -> list[str]:
+    """
+    Returns UUIDs that need processing based on selected tasks and existing backend data.
+    Mirrors the same logic as process_image_task for determining what's missing.
+    """
+    regenerate_metadata = options.get('regenerate_metadata', True)
+    compute_embeddings = options.get('compute_embeddings', True)
+    compute_metadata = options.get('compute_metadata', False)
+    compute_quality = options.get('compute_quality', True)
+    compute_faces = options.get('compute_faces', False)
+
+    if not uuids:
+        return []
+
+    # Load existing records for all UUIDs
+    existing_records = {}
+    for uuid in uuids:
+        existing_record = chroma_service.get_image(uuid)
+        if existing_record and existing_record['ids']:
+            existing_records[uuid] = existing_record['metadatas'][0] if existing_record['metadatas'] else {}
+
+    needing_processing = []
+    for uuid in uuids:
+        existing = existing_records.get(uuid, {})
+
+        needs_embedding = compute_embeddings and (regenerate_metadata or not existing.get('has_embedding', False))
+        has_any_metadata = existing.get('title') or existing.get('caption') or existing.get('alt_text') or existing.get('keywords')
+        needs_metadata = compute_metadata and (regenerate_metadata or not has_any_metadata)
+        needs_quality = compute_quality and (regenerate_metadata or existing.get('overall_score') is None)
+        needs_faces = compute_faces and (regenerate_metadata or not chroma_service.faces_checked_for_photo(uuid))
+
+        if needs_embedding or needs_metadata or needs_quality or needs_faces:
+            needing_processing.append(uuid)
+
+    return needing_processing
+
+
 def process_image_task(
     image_triplets: list[tuple[bytes, str, str]], 
     options: dict
@@ -79,10 +118,11 @@ def process_image_task(
         compute_embeddings = options.get('compute_embeddings', True)
         compute_metadata = options.get('compute_metadata', False)
         compute_quality = options.get('compute_quality', True)
+        compute_faces = options.get('compute_faces', False)
 
         logger.info(f"Starting batch processing of {total_images} images...")
         logger.info(f"regenerate_metadata={regenerate_metadata}, compute_embeddings={compute_embeddings}, "
-                   f"compute_metadata={compute_metadata}, compute_quality={compute_quality}")
+                   f"compute_metadata={compute_metadata}, compute_quality={compute_quality}, compute_faces={compute_faces}")
         
         # Check existing records if regenerate_metadata is False
         existing_records = {}
@@ -97,6 +137,7 @@ def process_image_task(
         images_needing_embeddings = []
         images_needing_metadata = []
         images_needing_quality = []
+        images_needing_faces = []
         
         for _, uuid, _ in image_triplets:
             existing = existing_records.get(uuid, {})
@@ -105,6 +146,11 @@ def process_image_task(
             needs_embedding = compute_embeddings and (regenerate_metadata or not existing.get('has_embedding', False))
             if needs_embedding:
                 images_needing_embeddings.append(uuid)
+
+            # Check if faces are needed
+            needs_faces = compute_faces and (regenerate_metadata or not chroma_service.faces_checked_for_photo(uuid))
+            if needs_faces:
+                images_needing_faces.append(uuid)
             
             # Check if metadata is needed
             has_any_metadata = existing.get('title') or existing.get('caption') or existing.get('alt_text') or existing.get('keywords')
@@ -122,25 +168,27 @@ def process_image_task(
                 images_needing_quality.append(uuid)
         
         logger.info(f"Generation needed: {len(images_needing_embeddings)} embeddings, "
-                   f"{len(images_needing_metadata)} metadata, {len(images_needing_quality)} quality scores")
+                   f"{len(images_needing_metadata)} metadata, {len(images_needing_quality)} quality scores, {len(images_needing_faces)} faces")
 
-        # If absolutely nothing needs to be generated, treat this as a successful no-op
-        if len(images_needing_embeddings) == 0 and len(images_needing_metadata) == 0 and len(images_needing_quality) == 0:
+        # If nothing needs to be generated and we're not regenerating, skip work.
+        # When regenerate_metadata is True we must not early-return: new images (no entry yet)
+        # still need to be added to Chroma with at least minimal metadata.
+        # Also do NOT early-return when compute_faces is True - we need to process images for face detection.
+        if (not regenerate_metadata
+                and not compute_faces
+                and len(images_needing_embeddings) == 0
+                and len(images_needing_metadata) == 0
+                and len(images_needing_quality) == 0):
             logger.info("No generation required (regenerate_metadata=False and all fields present). Returning success without changes.")
             return len(image_triplets), 0
-        
-        # Override compute flags based on what's actually needed
-        actual_compute_embeddings = len(images_needing_embeddings) > 0
-        actual_compute_metadata = len(images_needing_metadata) > 0
-        actual_compute_quality = len(images_needing_quality) > 0
-        
+
+    
         analysis_service = get_analysis_service()
         siglip_model = None
         siglip_processor = None
-        # Lazily acquire the model & processor for this batch to avoid loading at import time.
-        if actual_compute_embeddings:
-            siglip_model = server_lifecycle.get_model()
-            siglip_processor = server_lifecycle.get_processor()
+
+        siglip_model = server_lifecycle.get_model()
+        siglip_processor = server_lifecycle.get_processor()
 
         # Convert lists to sets for faster lookup in analyze_batch
         embeddings, datetimes, metadata_results, ratings = analysis_service.analyze_batch(
@@ -148,10 +196,9 @@ def process_image_task(
             set(images_needing_embeddings), set(images_needing_metadata), set(images_needing_quality)
         )
 
-        if embeddings is None and compute_embeddings:
+        # Only fail batch when we actually needed embeddings but got none
+        if embeddings is None and len(images_needing_embeddings) > 0:
             return 0, total_images
-
-        filenames = {triplet[1]: triplet[2] for triplet in image_triplets}
 
         for i, (image_bytes, uuid, filename) in enumerate(image_triplets):
             try:
@@ -181,8 +228,10 @@ def process_image_task(
                     failure_count += 1
                     continue
 
-                # If nothing needed for this UUID (already complete) just count success and move on
-                if not need_embedding and not need_metadata and not need_quality and not regenerate_metadata:
+                # If nothing needed for this UUID (already complete) and no face processing, skip
+                # When compute_faces is True we must not skip - we need to reach face detection
+                if (not need_embedding and not need_metadata and not need_quality
+                        and not regenerate_metadata and not compute_faces):
                     logger.info(f"UUID {uuid}: already fully indexed; skipping update.")
                     success_count += 1
                     continue
@@ -241,9 +290,9 @@ def process_image_task(
                 # Update embedding status
                 if embedding is not None:
                     main_metadata['has_embedding'] = True
-                elif not regenerate_metadata and existing:
-                    # Keep existing embedding status
-                    main_metadata['has_embedding'] = existing.get('has_embedding', False)
+                elif existing and existing.get('has_embedding', False):
+                    # Preserve existing embedding - we didn't generate a new one (e.g. only faces)
+                    main_metadata['has_embedding'] = True
                 else:
                     main_metadata['has_embedding'] = False
                 
@@ -272,7 +321,30 @@ def process_image_task(
                     else:
                         logger.info(f"UUID {uuid} is new. Indexing metadata-only entry (no embedding).")
                     chroma_service.add_image(uuid, embedding, main_metadata)
-                
+
+                # Face detection and indexing (second Chroma collection)
+                if compute_faces and image_bytes:
+                    # Without regenerate_metadata: skip if already checked (has faces or marked as checked, no faces)
+                    if not regenerate_metadata and chroma_service.faces_checked_for_photo(uuid):
+                        logger.debug(f"UUID {uuid}: faces already checked, skipping (regenerate_metadata=False).")
+                    else:
+                        try:
+                            chroma_service.delete_faces_by_photo_uuid(uuid)
+                            face_results = face_service.detect_faces(image_bytes)
+                            if face_results:
+                                face_ids = [f"{uuid}_{i}" for i in range(len(face_results))]
+                                embeddings_f = [r[0] for r in face_results]
+                                thumbnails_b64 = [r[1] for r in face_results]
+                                chroma_service.add_faces_batch(
+                                    face_ids, embeddings_f, [uuid] * len(face_results), thumbnails_b64
+                                )
+                                logger.info(f"UUID {uuid}: indexed {len(face_results)} face(s).")
+                            else:
+                                chroma_service.set_faces_checked(uuid)
+                                logger.debug(f"UUID {uuid}: no faces detected (marked as checked).")
+                        except Exception as e:
+                            logger.warning(f"Face detection/indexing failed for {uuid}: {e}", exc_info=True)
+
                 success_count += 1
 
             except Exception as e:

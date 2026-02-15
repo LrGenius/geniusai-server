@@ -5,7 +5,9 @@ import os
 
 import service_chroma as chroma_service
 from config import logger
-from service_index import process_image_task
+from service_index import process_image_task, get_uuids_needing_processing
+import service_face as face_service
+import service_persons as persons_service
 import base64
 import json
 
@@ -73,7 +75,8 @@ def _extract_options(data):
     options['compute_embeddings'] = 'embeddings' in tasks
     options['compute_metadata'] = 'metadata' in tasks
     options['compute_quality'] = 'quality' in tasks
-    
+    options['compute_faces'] = 'faces' in tasks
+
     return options
 
 @index_bp.route('/index', methods=['POST'])
@@ -248,7 +251,8 @@ def remove_image():
     
     try:
         chroma_service.delete_image(uuid)
-        logger.info(f"Image ID {uuid} removed from ChromaDB.")
+        chroma_service.delete_faces_by_photo_uuid(uuid)
+        logger.info(f"Image ID {uuid} removed from ChromaDB (including face embeddings).")
         return jsonify({"status": "removed", "uuid": uuid})
     except Exception as e:
         logger.error(f"Error removing image {uuid}: {e}")
@@ -364,3 +368,21 @@ def get_ids():
     ids_data = chroma_service.get_all_image_ids(has_embedding=has_embedding)
     logger.info(f"Returning {len(ids_data)} image IDs")
     return jsonify(ids_data)
+
+
+@index_bp.route('/index/check-unprocessed', methods=['POST'])
+def check_unprocessed():
+    """
+    Returns UUIDs that need processing based on selected tasks and existing backend data.
+    Used by the Lightroom plugin for "New or unprocessed photos" scope.
+    """
+    data = request.get_json() or {}
+    uuids = data.get('uuids', [])
+    if not uuids:
+        return jsonify({"uuids": []}), 200
+
+    options = _extract_options(data)
+    needing = get_uuids_needing_processing(uuids, options)
+    logger.info(f"check-unprocessed: {len(needing)} of {len(uuids)} photos need processing")
+    return jsonify({"uuids": needing}), 200
+

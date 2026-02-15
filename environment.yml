@@ -27,3 +27,6 @@ dependencies:
     - psutil
     - flask
     - waitress
+    - insightface
+    - onnxruntime
+    - scikit-learn
