@@ -15,8 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# App (vendored open_clip + src)
-COPY open_clip /app/open_clip
+# App (src)
 COPY src /app/src
 
 # Damit beim Start "config" und "open_clip" gefunden werden

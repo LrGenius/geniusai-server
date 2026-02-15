@@ -18,6 +18,7 @@ from routes_search import search_bp
 from routes_server import server_bp
 from routes_import import import_bp
 from routes_clip import clip_bp
+from routes_faces import faces_bp
 
 app = Flask(__name__)
 logger.info("Flask app created")
@@ -28,6 +29,7 @@ app.register_blueprint(search_bp)
 app.register_blueprint(server_bp)
 app.register_blueprint(clip_bp)
 app.register_blueprint(import_bp)
+app.register_blueprint(faces_bp)
 
 @app.errorhandler(500)
 def handle_internal_server_error(e):
