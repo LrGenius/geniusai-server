@@ -226,15 +226,23 @@ def get_all_faces(include_embeddings=True):
     return face_collection.get(include=include)
 
 
+# ChromaDB has a max batch size (~5461); stay safely below it.
+FACE_UPDATE_BATCH_SIZE = 5000
+
+
 def update_face_metadatas(face_ids, metadatas):
     """
     Update metadata for the given face ids. Each metadata dict must contain
     at least photo_uuid, thumbnail, person_id (full replacement per document).
+    Processes in batches to respect ChromaDB's max batch size limit.
     """
     _ensure_initialized()
     if not face_ids or len(face_ids) != len(metadatas):
         return
-    face_collection.update(ids=face_ids, metadatas=metadatas)
+    for i in range(0, len(face_ids), FACE_UPDATE_BATCH_SIZE):
+        chunk_ids = face_ids[i : i + FACE_UPDATE_BATCH_SIZE]
+        chunk_meta = metadatas[i : i + FACE_UPDATE_BATCH_SIZE]
+        face_collection.update(ids=chunk_ids, metadatas=chunk_meta)
 
 
 def has_faces_for_photo(photo_uuid):
