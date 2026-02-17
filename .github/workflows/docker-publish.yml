@@ -5,8 +5,11 @@
 name: Docker Build and Push
 
 on:
-  push:
-    tags: ['v*']
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       version:
