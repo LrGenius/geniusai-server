@@ -1,4 +1,7 @@
 # geniusai-server dependencies (for Docker / pip install)
+# open_clip (lokal) benötigt:
+ftfy
+regex
 transformers
 pillow
 ollama
