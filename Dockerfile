@@ -15,8 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# App (src)
+# App (src) + lokales open_clip
 COPY src /app/src
+COPY open_clip /app/open_clip
 
 # Damit beim Start "config" und "open_clip" gefunden werden
 ENV PYTHONPATH=/app:/app/src
@@ -36,4 +37,4 @@ VOLUME /models
 EXPOSE 19819
 
 # DB-Pfad per Volume; bei Bedarf überschreiben: docker run ... geniusai-server --db-path /anderer/pfad
-CMD ["python", "/app/src/geniusai_server.py", "--db-path", "/data"]
+CMD ["python", "/app/src/geniusai_server.py", "--db-path", "/data/db"]
