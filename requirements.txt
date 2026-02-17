@@ -15,5 +15,5 @@ waitress
 insightface
 onnxruntime
 scikit-learn
-torch
+torchvision
 
