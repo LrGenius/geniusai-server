@@ -3,6 +3,7 @@ import time
 import signal
 from config import DB_PATH, logger, IMAGE_MODEL_ID, TORCH_DEVICE
 import open_clip
+from open_clip_compat import wrap_tokenizer
 import threading
 import datetime
 import gc
@@ -90,7 +91,7 @@ def load_model():
 
                     model = model_obj
                     processor = proc
-                    tokenizer = tok
+                    tokenizer = wrap_tokenizer(tok)
 
             except Exception as e:
                 logger.warning(f"Failed to load OpenCLIP model from local cache. This can happen if the model is not fully downloaded, is corrupted, or if there is a configuration issue. The error was: {e}", exc_info=True)

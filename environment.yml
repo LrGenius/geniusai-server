@@ -13,7 +13,10 @@ dependencies:
   
   - pip:
     - open_clip_torch
-    - transformers
+    # transformers + tokenizers gemeinsam: älteres transformers will tokenizers<0.20,
+    # Modell-tokenizer.json braucht tokenizers>=0.22 → Mindestversionen.
+    - "transformers>=4.46"
+    - "tokenizers>=0.22.0"
     - rich
     - ollama
     - lmstudio
