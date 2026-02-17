@@ -22,4 +22,4 @@ insightface
 onnxruntime
 scikit-learn
 torchvision
-
+timm
