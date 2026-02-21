@@ -77,6 +77,11 @@ def _extract_options(data):
     options['compute_metadata'] = 'metadata' in tasks
     options['compute_quality'] = 'quality' in tasks
     options['compute_faces'] = 'faces' in tasks
+    options['compute_vertexai'] = 'vertexai' in tasks
+
+    # Vertex AI config (from Lightroom plugin manager)
+    options['vertex_project_id'] = data.get('vertex_project_id') or data.get('vertexProjectId')
+    options['vertex_location'] = data.get('vertex_location') or data.get('vertexLocation')
 
     return options
 

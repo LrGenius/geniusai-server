@@ -1,6 +1,7 @@
 import numpy as np
 
 import service_chroma as chroma_service
+import service_vertexai as vertexai_service
 from config import logger, TORCH_DEVICE
 import server_lifecycle as server_lifecycle
 import torch
@@ -33,13 +34,37 @@ def _transform_and_sort_results(results, quality_sort):
             "distance": float(round(distances[i], 4)),
         })
 
-    transformed_results.sort(key=lambda x: x['distance'])    
+    transformed_results.sort(key=lambda x: x['distance'])
     return transformed_results
+
+
+def _transform_vertex_results(vertex_results):
+    """Transform Vertex Chroma query result to list of {uuid, distance} sorted by distance."""
+    if not vertex_results or not vertex_results.get('ids') or not vertex_results['ids'][0]:
+        return []
+    ids, distances = vertex_results['ids'][0], vertex_results['distances'][0]
+    out = [{"uuid": uid, "distance": float(round(d, 4))} for uid, d in zip(ids, distances)]
+    out.sort(key=lambda x: x['distance'])
+    return out
+
+
+def _merge_semantic_results(siglip_results, vertex_results):
+    """Merge SigLIP and Vertex semantic results by UUID; keep best (min) distance per UUID."""
+    by_uuid = {}
+    for r in siglip_results:
+        by_uuid[r["uuid"]] = r["distance"]
+    for r in vertex_results:
+        d = r["distance"]
+        if r["uuid"] not in by_uuid or d < by_uuid[r["uuid"]]:
+            by_uuid[r["uuid"]] = d
+    merged = [{"uuid": uid, "distance": d} for uid, d in by_uuid.items()]
+    merged.sort(key=lambda x: x['distance'])
+    return merged
 
 def search_images(term, quality_sort, uuids_to_search):
     logger.info(f"Searching for '{term}' (quality_sort: {quality_sort}, scoped: {uuids_to_search is not None})")
 
-    # 1. Semantic Search
+    # 1. Semantic Search (SigLIP2)
     tokenizer = server_lifecycle.get_tokenizer()
     if tokenizer:
         text_tokens = tokenizer(term).to(TORCH_DEVICE)
@@ -61,6 +86,32 @@ def search_images(term, quality_sort, uuids_to_search):
         logger.info("CLIP model not loaded, skipping semantic search.")
         sorted_semantic_results = []
         semantic_uuids = set()
+
+    # 1b. Vertex AI semantic search when available and collection has embeddings in scope
+    vertex_semantic_results = []
+    if vertexai_service.is_available() and term.strip():
+        vertex_where = {"uuid": {"$in": list(uuids_to_search)}} if uuids_to_search else None
+        try:
+            vertex_ids = chroma_service.get_all_vertex_image_ids()
+            if uuids_to_search:
+                scope_vertex = set(vertex_ids) & set(uuids_to_search)
+            else:
+                scope_vertex = set(vertex_ids)
+            if scope_vertex:
+                query_emb = vertexai_service.get_text_embedding(term)
+                if query_emb:
+                    vertex_results = chroma_service.query_vertex_images(
+                        query_embedding=query_emb,
+                        n_results=300,
+                        where_clause=vertex_where,
+                    )
+                    vertex_semantic_results = _transform_vertex_results(vertex_results)
+                    logger.info(f"Vertex AI semantic search returned {len(vertex_semantic_results)} results.")
+        except Exception as e:
+            logger.warning("Vertex AI search failed: %s", e, exc_info=True)
+    if vertex_semantic_results:
+        sorted_semantic_results = _merge_semantic_results(sorted_semantic_results, vertex_semantic_results)
+        semantic_uuids = {res['uuid'] for res in sorted_semantic_results}
 
     # 2. Metadata Search (in-memory)
     logger.info("Performing metadata search in-memory. This may be slow for large databases without a UUID filter.")

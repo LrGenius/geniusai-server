@@ -33,3 +33,4 @@ dependencies:
     - insightface
     - onnxruntime
     - scikit-learn
+    - google-cloud-aiplatform
