@@ -38,6 +38,11 @@ def _get_vertex_model(vertex_project_id=None, vertex_location=None):
         import vertexai
         from vertexai.vision_models import MultiModalEmbeddingModel
 
+        # Set quota project for local ADC (gcloud auth application-default login)
+        # Required by aiplatform API when using user credentials
+        if "GOOGLE_CLOUD_QUOTA_PROJECT" not in os.environ:
+            os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = project
+
         vertexai.init(project=project, location=location)
         model = MultiModalEmbeddingModel.from_pretrained("multimodalembedding@001")
         _vertex_model_cache[key] = model

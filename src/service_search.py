@@ -49,17 +49,12 @@ def _transform_vertex_results(vertex_results):
 
 
 def _merge_semantic_results(siglip_results, vertex_results):
-    """Merge SigLIP and Vertex semantic results by UUID; keep best (min) distance per UUID."""
-    by_uuid = {}
-    for r in siglip_results:
-        by_uuid[r["uuid"]] = r["distance"]
-    for r in vertex_results:
-        d = r["distance"]
-        if r["uuid"] not in by_uuid or d < by_uuid[r["uuid"]]:
-            by_uuid[r["uuid"]] = d
-    merged = [{"uuid": uid, "distance": d} for uid, d in by_uuid.items()]
-    merged.sort(key=lambda x: x['distance'])
-    return merged
+    """Merge SigLIP and Vertex results without mixing distance scales.
+    Vertex (higher quality) first, sorted by Vertex distance; then SigLIP
+    results not in Vertex, sorted by SigLIP distance. No cross-model distance comparison."""
+    vertex_uuids = {r["uuid"] for r in vertex_results}
+    siglip_only = [r for r in siglip_results if r["uuid"] not in vertex_uuids]
+    return list(vertex_results) + siglip_only
 
 def search_images(term, quality_sort, uuids_to_search):
     logger.info(f"Searching for '{term}' (quality_sort: {quality_sort}, scoped: {uuids_to_search is not None})")
