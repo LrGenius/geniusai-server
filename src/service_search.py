@@ -91,7 +91,7 @@ def _normalize_search_sources(search_sources):
     return out
 
 
-def search_images(term, quality_sort, uuids_to_search, search_sources=None):
+def search_images(term, quality_sort, uuids_to_search, search_sources=None, *, vertex_project_id=None, vertex_location=None):
     sources = _normalize_search_sources(search_sources)
     logger.info(f"Searching for '{term}' (quality_sort: {quality_sort}, scoped: {uuids_to_search is not None}, sources: {sources})")
 
@@ -120,9 +120,9 @@ def search_images(term, quality_sort, uuids_to_search, search_sources=None):
         else:
             logger.info("CLIP model not loaded, skipping semantic search (SigLIP).")
 
-    # 1b. Vertex AI semantic search
+    # 1b. Vertex AI semantic search (use vertex_project_id/vertex_location from request so plugin prefs are used)
     vertex_semantic_results = []
-    if sources["semantic_vertex"] and vertexai_service.is_available() and term.strip():
+    if sources["semantic_vertex"] and vertexai_service.is_available(vertex_project_id, vertex_location) and term.strip():
         vertex_where = {"uuid": {"$in": list(uuids_to_search)}} if uuids_to_search else None
         try:
             vertex_ids = chroma_service.get_all_vertex_image_ids()
@@ -131,7 +131,7 @@ def search_images(term, quality_sort, uuids_to_search, search_sources=None):
             else:
                 scope_vertex = set(vertex_ids)
             if scope_vertex:
-                query_emb = vertexai_service.get_text_embedding(term)
+                query_emb = vertexai_service.get_text_embedding(term, vertex_project_id, vertex_location)
                 if query_emb:
                     vertex_results = chroma_service.query_vertex_images(
                         query_embedding=query_emb,
