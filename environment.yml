@@ -30,3 +30,4 @@ dependencies:
     - insightface
     - onnxruntime
     - scikit-learn
+    - scipy
